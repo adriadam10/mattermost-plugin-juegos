@@ -1,0 +1,80 @@
+{
+    "id": "com.github.adriadam10.juegos",
+    "name": "Juegos",
+    "description": "Minijuegos para grupos en Mattermost: Respuestas absurdas, Pie de foto, Teléfono dibujado, Número único más bajo y un lienzo de píxeles por temporada, con ranking mensual.",
+    "homepage_url": "https://github.com/adriadam10/mattermost-plugin-juegos",
+    "support_url": "https://github.com/adriadam10/mattermost-plugin-juegos/issues",
+    "version": "0.1.0",
+    "min_server_version": "11.11.0",
+    "server": {
+        "executables": {
+            "linux-amd64": "server/dist/plugin-linux-amd64",
+            "linux-arm64": "server/dist/plugin-linux-arm64"
+        }
+    },
+    "webapp": {
+        "bundle_path": "webapp/dist/main.js"
+    },
+    "settings_schema": {
+        "header": "Minijuegos que se lanzan con /juegos. El ranking y el lienzo son de todo el servidor y se reinician cada mes.",
+        "settings": [
+            {
+                "key": "CommandTrigger",
+                "display_name": "Comando",
+                "type": "text",
+                "default": "juegos",
+                "help_text": "Comando de barra, sin la barra."
+            },
+            {
+                "key": "AnnouncementChannel",
+                "display_name": "Canal de anuncios",
+                "type": "text",
+                "default": "",
+                "help_text": "equipo/canal donde se publican el podio y el lienzo al cerrar cada temporada. Vacío: sin anuncios."
+            },
+            {
+                "key": "TimeZone",
+                "display_name": "Zona horaria",
+                "type": "text",
+                "default": "Europe/Madrid",
+                "help_text": "Zona IANA en la que cambia la temporada y se muestran las horas de los avisos."
+            },
+            {
+                "key": "LivePhaseSeconds",
+                "display_name": "Fase en directo (segundos)",
+                "type": "number",
+                "default": 60,
+                "help_text": "Duración base de una fase en las partidas en directo (20 a 600). Cada juego la multiplica: dibujar dura el doble."
+            },
+            {
+                "key": "AsyncPhaseHours",
+                "display_name": "Fase asíncrona (horas)",
+                "type": "number",
+                "default": 4,
+                "help_text": "Duración base de una fase en las partidas asíncronas (1 a 72)."
+            },
+            {
+                "key": "GiphyAPIKey",
+                "display_name": "Clave de la API de Giphy",
+                "type": "text",
+                "default": "",
+                "secret": true,
+                "help_text": "Para Pie de foto. Vacía: se usa la del plugin GIF commands si está instalado."
+            },
+            {
+                "key": "CanvasSize",
+                "display_name": "Tamaño del lienzo",
+                "type": "number",
+                "default": 48,
+                "help_text": "Píxeles por lado del lienzo de la temporada (16 a 128). Se aplica al empezar la siguiente temporada."
+            },
+            {
+                "key": "CanvasCooldownMinutes",
+                "display_name": "Espera entre píxeles (minutos)",
+                "type": "number",
+                "default": 3,
+                "help_text": "Minutos que espera cada persona entre un píxel y el siguiente (0 a 1440)."
+            }
+        ]
+    }
+}
