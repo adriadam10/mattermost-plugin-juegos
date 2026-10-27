@@ -5,6 +5,7 @@ import manifest from '../../plugin.json';
 import {fetchGames} from './api.js';
 import {emit, on} from './bus.js';
 import CanvasModal from './canvas.jsx';
+import {Overlay} from './match/common.jsx';
 import MatchPost from './match/post.jsx';
 import Menu from './menu.jsx';
 import {STYLES} from './styles.js';
@@ -22,11 +23,26 @@ function Root() {
                 channelId={open.channelId}
                 onClose={close}
                 onCanvas={() => setOpen({what: 'canvas'})}
+                onDoom={(url) => setOpen({what: 'doom', url})}
             />
         );
     }
     if (open?.what === 'canvas') {
         return <CanvasModal onClose={close}/>;
+    }
+    if (open?.what === 'doom') {
+        return (
+            <Overlay
+                wide={true}
+                onClose={close}
+            >
+                <iframe
+                    src={open.url}
+                    title='Doom'
+                    allow='fullscreen; autoplay'
+                />
+            </Overlay>
+        );
     }
     return null;
 }

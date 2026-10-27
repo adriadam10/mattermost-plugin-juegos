@@ -1,10 +1,10 @@
 {
     "id": "com.github.adriadam10.juegos",
     "name": "Juegos",
-    "description": "Minijuegos para grupos en Mattermost: Respuestas absurdas, Pie de foto, Teléfono dibujado, Número único más bajo y un lienzo de píxeles por temporada, con ranking mensual.",
+    "description": "Minijuegos para grupos en Mattermost: Respuestas absurdas, Pie de foto, Teléfono dibujado, Número único más bajo, 4 en raya, Hundir la flota, Guiñote, Doom y un lienzo de píxeles por temporada, con ranking mensual.",
     "homepage_url": "https://github.com/adriadam10/mattermost-plugin-juegos",
     "support_url": "https://github.com/adriadam10/mattermost-plugin-juegos/issues",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "min_server_version": "11.11.0",
     "server": {
         "executables": {
@@ -74,6 +74,13 @@
                 "type": "number",
                 "default": 3,
                 "help_text": "Minutos que espera cada persona entre un píxel y el siguiente (0 a 1440)."
+            },
+            {
+                "key": "DoomURL",
+                "display_name": "Dirección de Doom",
+                "type": "text",
+                "default": "",
+                "help_text": "Dónde se sirve Doom en el navegador (por ejemplo /doom/, en el mismo dominio que Mattermost). Vacío: Doom no sale en el menú. Ver el README."
             }
         ]
     }

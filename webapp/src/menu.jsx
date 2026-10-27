@@ -3,7 +3,7 @@ import React, {useEffect, useState} from 'react';
 import {createMatch, fetchGames, fetchRanking} from './api.js';
 import {Overlay} from './match/common.jsx';
 
-export default function Menu({channelId, onClose, onCanvas}) {
+export default function Menu({channelId, onClose, onCanvas, onDoom}) {
     const [info, setInfo] = useState(null);
     const [ranking, setRanking] = useState(null);
     const [mode, setMode] = useState('directo');
@@ -73,6 +73,16 @@ export default function Menu({channelId, onClose, onCanvas}) {
                     <strong>{'Lienzo de temporada'}</strong>
                     <span className='jg-muted'>{'Un lienzo de píxeles para todo el servidor. Pon un píxel de vez en cuando; a final de mes se publica.'}</span>
                 </button>
+                {info?.doom_url && (
+                    <button
+                        className='jg-option jg-game'
+                        onClick={() => onDoom(info.doom_url)}
+                    >
+                        <span className='jg-emoji'>{'👹'}</span>
+                        <strong>{'Doom'}</strong>
+                        <span className='jg-muted'>{'El Doom de 1993, episodio 1 (shareware). Para un descanso; no cuenta para el ranking.'}</span>
+                    </button>
+                )}
             </div>
             {error && <p className='jg-error'>{error}</p>}
             {ranking && <Ranking ranking={ranking}/>}
@@ -81,6 +91,9 @@ export default function Menu({channelId, onClose, onCanvas}) {
 }
 
 function players(g) {
+    if (g.bots) {
+        return `Hasta ${g.max_players}; si falta gente, juega el bot`;
+    }
     if (!g.lobby) {
         return `Juega quien quiera, desde ${g.min_players}`;
     }

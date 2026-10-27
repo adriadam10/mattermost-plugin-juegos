@@ -3,8 +3,10 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math/rand/v2"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/mattermost/mattermost/server/public/model"
@@ -42,7 +44,7 @@ func (p *Plugin) env(m *engine.Match, now time.Time) *engine.Env {
 }
 
 // createMatch starts a match of gameID in channelID and posts it there.
-func (p *Plugin) createMatch(userID, channelID, gameID string, mode engine.Mode) (*engine.Match, error) {
+func (p *Plugin) createMatch(userID, channelID, gameID string, mode engine.Mode, options map[string]string) (*engine.Match, error) {
 	game, ok := gameByID(gameID)
 	if !ok {
 		return nil, errUnknownGame
@@ -53,8 +55,15 @@ func (p *Plugin) createMatch(userID, channelID, gameID string, mode engine.Mode)
 	if !p.API.HasPermissionToChannel(userID, channelID, model.PermissionCreatePost) {
 		return nil, engine.Refusal("No puedes escribir en este canal")
 	}
+	for key, value := range options {
+		v, err := p.checkOption(game.Info(), userID, key, value)
+		if err != nil {
+			return nil, err
+		}
+		options[key] = v
+	}
 	now := time.Now()
-	m := &engine.Match{ID: model.NewId(), Game: gameID, ChannelID: channelID, CreatorID: userID, Mode: mode, CreatedAt: now.UnixMilli()}
+	m := &engine.Match{ID: model.NewId(), Game: gameID, ChannelID: channelID, CreatorID: userID, Mode: mode, CreatedAt: now.UnixMilli(), Options: options}
 	env := p.env(m, now)
 	if game.Info().Lobby {
 		m.Players = []string{userID}
@@ -81,7 +90,50 @@ func (p *Plugin) createMatch(userID, channelID, gameID string, mode engine.Mode)
 		return nil, err
 	}
 	p.notice(m, game, env)
+	p.challenge(m)
 	return m, nil
+}
+
+// checkOption validates an option of info picked by userID and returns the value to store.
+func (p *Plugin) checkOption(info engine.Info, userID, key, value string) (string, error) {
+	for _, o := range info.Options {
+		if o.Key != key {
+			continue
+		}
+		if len(o.Choices) == 0 {
+			return p.checkRival(userID, value)
+		}
+		for _, c := range o.Choices {
+			if c.Value == value {
+				return value, nil
+			}
+		}
+		return "", engine.Refusal("Opción no válida")
+	}
+	return "", engine.Refusal("Este juego no tiene esa opción")
+}
+
+// checkRival turns "@name" into a username that can be challenged; empty means anybody.
+func (p *Plugin) checkRival(userID, value string) (string, error) {
+	name := strings.ToLower(strings.TrimPrefix(strings.TrimSpace(value), "@"))
+	if name == "" {
+		return "", nil
+	}
+	user, appErr := p.API.GetUserByUsername(name)
+	if appErr != nil || user.DeleteAt != 0 || user.IsBot {
+		return "", engine.Refusal(fmt.Sprintf("No encuentro a @%s", name))
+	}
+	if user.Id == userID {
+		return "", engine.Refusal("No puedes retarte a ti")
+	}
+	return user.Username, nil
+}
+
+// challenge tells a challenged rival in the thread, so they get a notification.
+func (p *Plugin) challenge(m *engine.Match) {
+	if rival := m.Options[engine.OptionRival]; rival != "" && m.Phase == engine.PhaseLobby {
+		p.reply(m, fmt.Sprintf("⚔️ @%s, @%s te reta. Si no te apuntas a tiempo, jugará contra el bot.", rival, p.username(m.CreatorID)), nil)
+	}
 }
 
 func (p *Plugin) loadMatch(id string) (*engine.Match, error) {
@@ -108,7 +160,7 @@ func (p *Plugin) updateMatch(id string, change func(*engine.Match, engine.Game, 
 		}
 		if m.Phase == engine.PhaseFinished && m.Result != nil && m.Result.Awarded == nil {
 			m.Result.Awarded = map[string]int{}
-			if len(m.Result.Scores) >= g.Info().MinPlayers {
+			if !m.Result.Unranked && len(m.Result.Scores) >= g.Info().MinPlayers {
 				m.Result.Awarded = engine.Award(m.Result.Scores)
 			}
 		}
@@ -129,7 +181,7 @@ func (p *Plugin) updateMatch(id string, change func(*engine.Match, engine.Game, 
 
 // act is a move by userID: the engine's own (join, start...) or the game's.
 func (p *Plugin) act(id, userID, action string, move json.RawMessage) (*engine.Match, error) {
-	return p.updateMatch(id, func(m *engine.Match, g engine.Game, env *engine.Env) error {
+	m, err := p.updateMatch(id, func(m *engine.Match, g engine.Game, env *engine.Env) error {
 		if m.Over() {
 			return engine.Refusal("La partida ya ha terminado")
 		}
@@ -142,6 +194,9 @@ func (p *Plugin) act(id, userID, action string, move json.RawMessage) (*engine.M
 			}
 			if info.MaxPlayers > 0 && len(m.Players) >= info.MaxPlayers && !m.IsPlayer(userID) {
 				return engine.Refusal("La partida está llena")
+			}
+			if rival := m.Options[engine.OptionRival]; rival != "" && !isCreator && p.username(userID) != rival {
+				return engine.Refusal(fmt.Sprintf("Es un reto a @%s", rival))
 			}
 			m.AddPlayer(userID)
 		case "leave":
@@ -157,8 +212,31 @@ func (p *Plugin) act(id, userID, action string, move json.RawMessage) (*engine.M
 				return engine.Refusal("Faltan jugadores")
 			}
 			return g.Start(m, env)
+		case "option":
+			if m.Phase != engine.PhaseLobby || !isCreator {
+				return engine.Refusal("Solo quien la ha creado puede cambiarlo, antes de empezar")
+			}
+			opt, err := engine.Decode[struct {
+				Key   string `json:"key"`
+				Value string `json:"value"`
+			}](move)
+			if err != nil {
+				return err
+			}
+			value, err := p.checkOption(info, userID, opt.Key, opt.Value)
+			if err != nil {
+				return err
+			}
+			if m.Options == nil {
+				m.Options = map[string]string{}
+			}
+			m.Options[opt.Key] = value
+			if opt.Key == engine.OptionRival {
+				// A new rival replaces whoever had joined to play the old challenge.
+				m.Players = []string{m.CreatorID}
+			}
 		case "skip":
-			if m.Phase == engine.PhaseLobby || !isCreator {
+			if m.Phase == engine.PhaseLobby || !isCreator || info.Turns {
 				return engine.Refusal("Solo quien la ha creado puede pasar de fase")
 			}
 			return g.Timeout(m, env)
@@ -178,6 +256,10 @@ func (p *Plugin) act(id, userID, action string, move json.RawMessage) (*engine.M
 		}
 		return nil
 	})
+	if err == nil && action == "option" {
+		p.challenge(m)
+	}
+	return m, err
 }
 
 // expireDeadlines moves on every active match whose phase is over.

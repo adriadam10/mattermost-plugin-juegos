@@ -15,6 +15,8 @@ const PHASES = {
     dibujar: 'Dibujando',
     describir: 'Describiendo',
     votar: 'Votación',
+    turno: 'Jugando',
+    colocar: 'Colocando la flota',
     fin: 'Terminada',
     cancelada: 'Cancelada',
 };
@@ -107,7 +109,17 @@ export default function MatchPost({post}) {
             )}
             {match.scores && <Scores scores={match.scores}/>}
             {error && <p className='jg-error'>{error}</p>}
-            {!over && match.is_creator && match.phase !== 'lobby' && (
+            {!over && match.is_creator && match.phase !== 'lobby' && match.info.turns && (
+                <div className='jg-row'>
+                    <button
+                        className='jg-btn jg-danger'
+                        onClick={() => send('cancel')}
+                    >
+                        {'Cancelar partida'}
+                    </button>
+                </div>
+            )}
+            {!over && match.is_creator && match.phase !== 'lobby' && !match.info.turns && (
                 <div className='jg-row'>
                     <button
                         className='jg-btn jg-ghost'
@@ -130,12 +142,23 @@ export default function MatchPost({post}) {
 function Lobby({match, send}) {
     const {info, players} = match;
     const enough = players.length >= info.min_players;
+    const rival = match.options?.rival;
+    const full = info.max_players && players.length >= info.max_players;
     return (
         <div className='jg-col'>
-            <span className='jg-muted'>{`${info.description} Hacen falta ${info.min_players}; caben ${info.max_players}.`}</span>
+            <span className='jg-muted'>{info.bots ? `${info.description} Caben ${info.max_players}; los huecos los juega el bot.` : `${info.description} Hacen falta ${info.min_players}; caben ${info.max_players}.`}</span>
             <Players players={players}/>
+            {info.options?.map((o) => (
+                <LobbyOption
+                    key={o.key}
+                    option={o}
+                    value={match.options?.[o.key] ?? ''}
+                    editable={match.is_creator}
+                    send={send}
+                />
+            ))}
             <div className='jg-row'>
-                {!match.joined && (
+                {!match.joined && !full && (!rival || match.me === rival) && (
                     <button
                         className='jg-btn'
                         onClick={() => send('join')}
@@ -170,6 +193,56 @@ function Lobby({match, send}) {
                 )}
             </div>
             <span className='jg-muted'>{'Si se llega al mínimo, empieza sola al acabar la cuenta atrás.'}</span>
+        </div>
+    );
+}
+
+// LobbyOption shows an option the creator picks before starting: a choice, or
+// whom they challenge.
+function LobbyOption({option, value, editable, send}) {
+    const [rival, setRival] = useState(value);
+    if (!option.choices?.length) {
+        if (!editable) {
+            return value ? <span>{`⚔️ Reto a @${value}`}</span> : null;
+        }
+        return (
+            <form
+                className='jg-row'
+                onSubmit={(e) => {
+                    e.preventDefault();
+                    send('option', {key: option.key, value: rival});
+                }}
+            >
+                <span>{`${option.label}:`}</span>
+                <input
+                    className='jg-input'
+                    value={rival}
+                    placeholder='@usuario (vacío: el primero que se apunte)'
+                    onChange={(e) => setRival(e.target.value)}
+                />
+                <button
+                    className='jg-btn jg-ghost'
+                    type='submit'
+                    disabled={rival.replace(/^@/, '') === value}
+                >
+                    {'Retar'}
+                </button>
+            </form>
+        );
+    }
+    return (
+        <div className='jg-row'>
+            <span>{`${option.label}:`}</span>
+            {option.choices.map((c) => (
+                <button
+                    key={c.value}
+                    className={`jg-option ${value === c.value ? 'jg-chosen' : ''}`}
+                    disabled={!editable}
+                    onClick={() => send('option', {key: option.key, value: c.value})}
+                >
+                    {c.label}
+                </button>
+            ))}
         </div>
     );
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"embed"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -14,6 +15,20 @@ import (
 
 var blobKeyPattern = regexp.MustCompile(`^blob-[a-z0-9]{26}$`)
 
+// The Spanish deck of the guiñote; see the README credits.
+//
+//go:embed cards/*.webp
+var cardsFS embed.FS
+
+var cardFiles = cacheForever(http.FileServerFS(cardsFS))
+
+func cacheForever(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		next.ServeHTTP(w, r)
+	})
+}
+
 func (p *Plugin) newRouter() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/games", p.handleGames)
@@ -21,6 +36,7 @@ func (p *Plugin) newRouter() http.Handler {
 	mux.HandleFunc("GET /api/v1/matches/{id}", p.handleMatch)
 	mux.HandleFunc("POST /api/v1/matches/{id}/act", p.handleAct)
 	mux.HandleFunc("GET /api/v1/blobs/{key}", p.handleBlob)
+	mux.Handle("GET /api/v1/cards/", http.StripPrefix("/api/v1/", cardFiles))
 	mux.HandleFunc("GET /api/v1/canvas", p.handleCanvas)
 	mux.HandleFunc("POST /api/v1/canvas", p.handlePaint)
 	mux.HandleFunc("GET /api/v1/ranking", p.handleRanking)
@@ -79,19 +95,21 @@ func (p *Plugin) handleGames(w http.ResponseWriter, _ *http.Request) {
 		"async_hours":   int(s.asyncPhase.Hours()),
 		"trigger":       s.trigger,
 		"giphy_enabled": p.giphyKey() != "",
+		"doom_url":      s.doomURL,
 	})
 }
 
 func (p *Plugin) handleCreate(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Game      string      `json:"game"`
-		Mode      engine.Mode `json:"mode"`
-		ChannelID string      `json:"channel_id"`
+		Game      string            `json:"game"`
+		Mode      engine.Mode       `json:"mode"`
+		ChannelID string            `json:"channel_id"`
+		Options   map[string]string `json:"options"`
 	}
 	if !decodeBody(w, r, &req) {
 		return
 	}
-	m, err := p.createMatch(userOf(r), req.ChannelID, req.Game, req.Mode)
+	m, err := p.createMatch(userOf(r), req.ChannelID, req.Game, req.Mode, req.Options)
 	if err != nil {
 		p.fail(w, "create match", err)
 		return

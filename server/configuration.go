@@ -18,6 +18,7 @@ type configuration struct {
 	GiphyAPIKey           string
 	CanvasSize            any
 	CanvasCooldownMinutes any
+	DoomURL               string
 }
 
 // settings is the validated configuration.
@@ -30,6 +31,8 @@ type settings struct {
 	giphyKey                      string
 	canvasSize                    int
 	canvasCooldown                time.Duration
+	// Where Doom is served; empty hides it from the menu.
+	doomURL string
 }
 
 func number(name string, value any, def, lo, hi int) (int, error) {
@@ -68,6 +71,7 @@ func (c configuration) settings() (*settings, error) {
 	s := &settings{
 		trigger:  strings.TrimPrefix(orDefault(c.CommandTrigger, "juegos"), "/"),
 		giphyKey: strings.TrimSpace(c.GiphyAPIKey),
+		doomURL:  strings.TrimSpace(c.DoomURL),
 	}
 	if strings.ContainsAny(s.trigger, " /") {
 		return nil, fmt.Errorf("CommandTrigger must be a single word, got %q", s.trigger)

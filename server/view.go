@@ -19,27 +19,30 @@ type scoreView struct {
 
 // matchView is a match as the webapp draws it for one user.
 type matchView struct {
-	ID        string       `json:"id"`
-	Info      engine.Info  `json:"info"`
-	Mode      engine.Mode  `json:"mode"`
-	Phase     string       `json:"phase"`
-	Round     int          `json:"round"`
-	Deadline  int64        `json:"deadline"`
-	Now       int64        `json:"now"`
-	Creator   string       `json:"creator"`
-	IsCreator bool         `json:"is_creator"`
-	Joined    bool         `json:"joined"`
-	Players   []playerView `json:"players"`
-	Game      any          `json:"game"`
-	Scores    []scoreView  `json:"scores,omitempty"`
+	ID        string      `json:"id"`
+	Info      engine.Info `json:"info"`
+	Mode      engine.Mode `json:"mode"`
+	Phase     string      `json:"phase"`
+	Round     int         `json:"round"`
+	Deadline  int64       `json:"deadline"`
+	Now       int64       `json:"now"`
+	Creator   string      `json:"creator"`
+	IsCreator bool        `json:"is_creator"`
+	// Username of who looks at the match.
+	Me      string            `json:"me"`
+	Joined  bool              `json:"joined"`
+	Players []playerView      `json:"players"`
+	Options map[string]string `json:"options"`
+	Game    any               `json:"game"`
+	Scores  []scoreView       `json:"scores,omitempty"`
 }
 
 func (p *Plugin) matchView(m *engine.Match, userID string) matchView {
 	game, _ := gameByID(m.Game)
 	v := matchView{
 		ID: m.ID, Mode: m.Mode, Phase: m.Phase, Round: m.Round, Deadline: m.Deadline,
-		Now: time.Now().UnixMilli(), Creator: p.username(m.CreatorID), IsCreator: m.CreatorID == userID,
-		Joined: m.IsPlayer(userID), Players: make([]playerView, len(m.Players)),
+		Now: time.Now().UnixMilli(), Creator: p.username(m.CreatorID), IsCreator: m.CreatorID == userID, Me: p.username(userID),
+		Joined: m.IsPlayer(userID), Players: make([]playerView, len(m.Players)), Options: map[string]string{},
 	}
 	for i, id := range m.Players {
 		v.Players[i] = playerView{ID: id, Username: p.username(id)}
@@ -48,6 +51,9 @@ func (p *Plugin) matchView(m *engine.Match, userID string) matchView {
 		return v
 	}
 	v.Info = game.Info()
+	for _, o := range v.Info.Options {
+		v.Options[o.Key] = m.Option(v.Info, o.Key)
+	}
 	if m.Phase != engine.PhaseLobby && m.Phase != engine.PhaseCanceled {
 		v.Game = game.View(m, userID, p.env(m, time.Now()))
 	}

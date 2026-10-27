@@ -2,7 +2,7 @@ import React, {useEffect, useState} from 'react';
 
 import {remaining} from '../time.js';
 
-export function Overlay({onClose, children}) {
+export function Overlay({onClose, wide, children}) {
     useEffect(() => {
         const onKey = (e) => e.key === 'Escape' && onClose();
         window.addEventListener('keydown', onKey);
@@ -13,7 +13,7 @@ export function Overlay({onClose, children}) {
             className='jg-overlay'
             onMouseDown={(e) => e.target === e.currentTarget && onClose()}
         >
-            <div className='jg-modal'>{children}</div>
+            <div className={`jg-modal ${wide ? 'jg-doom' : ''}`}>{children}</div>
         </div>
     );
 }

@@ -50,13 +50,21 @@ func (e *Env) Finish(m *Match, scores map[string]int, summary string, parts ...P
 	m.Result = &Result{Scores: scores, Summary: summary, Parts: parts}
 }
 
-// Mentions turns user ids into "@a @b".
+// Mentions turns user ids into "@a @b"; bots are named, not mentioned.
 func (e *Env) Mentions(ids []string) string {
 	parts := make([]string, len(ids))
 	for i, id := range ids {
-		parts[i] = "@" + e.Username(id)
+		parts[i] = e.Name(id)
 	}
 	return strings.Join(parts, " ")
+}
+
+// Name is "@user" for a user and "🤖 bot" for a bot seat.
+func (e *Env) Name(id string) string {
+	if IsBot(id) {
+		return "🤖 bot"
+	}
+	return "@" + e.Username(id)
 }
 
 // Places gives ranking points by place: ties share it. Only players who

@@ -3,6 +3,9 @@ package main
 import (
 	"github.com/adriadam10/mattermost-plugin-juegos/server/engine"
 	"github.com/adriadam10/mattermost-plugin-juegos/server/games/absurdas"
+	"github.com/adriadam10/mattermost-plugin-juegos/server/games/cuatro"
+	"github.com/adriadam10/mattermost-plugin-juegos/server/games/flota"
+	"github.com/adriadam10/mattermost-plugin-juegos/server/games/guinote"
 	"github.com/adriadam10/mattermost-plugin-juegos/server/games/numero"
 	"github.com/adriadam10/mattermost-plugin-juegos/server/games/pie"
 	"github.com/adriadam10/mattermost-plugin-juegos/server/games/telefono"
@@ -15,6 +18,9 @@ var games = []engine.Game{
 	pie.Game{},
 	telefono.Game{},
 	numero.Game{},
+	cuatro.Game{},
+	flota.Game{},
+	guinote.Game{},
 }
 
 func gameByID(id string) (engine.Game, bool) {

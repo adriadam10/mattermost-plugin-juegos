@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
 )
 
 // Mode is how fast a match is played.
@@ -37,7 +39,32 @@ type Info struct {
 	// Lobby games need to know the players before they start (turns, pairings);
 	// the others start at once and whoever acts plays.
 	Lobby bool `json:"lobby"`
+	// Turns games are played in turns: the creator cannot skip a phase, since
+	// that would make whoever is on turn lose.
+	Turns bool `json:"turns,omitempty"`
+	// Bots games fill the empty seats with bots when they start.
+	Bots bool `json:"bots,omitempty"`
+	// Options the creator picks in the lobby.
+	Options []Option `json:"options,omitempty"`
 }
+
+// Option is a choice the creator makes before the match starts.
+type Option struct {
+	Key   string `json:"key"`
+	Label string `json:"label"`
+	// Empty Choices means the value is a username: the only one who may join.
+	Choices []Choice `json:"choices,omitempty"`
+	Default string   `json:"default,omitempty"`
+}
+
+// Choice is one value of an Option.
+type Choice struct {
+	Value string `json:"value"`
+	Label string `json:"label"`
+}
+
+// OptionRival is the username of the only player a creator wants to face.
+const OptionRival = "rival"
 
 // Game is one game. Every method gets the match to read or change; the engine
 // saves it afterwards, so a method that returns an error changes nothing.
@@ -75,6 +102,8 @@ type Match struct {
 	Deadline  int64    `json:"deadline"`
 	CreatedAt int64    `json:"created_at"`
 	Players   []string `json:"players"`
+	// Options picked by the creator; see Info.Options.
+	Options map[string]string `json:"options,omitempty"`
 	// Game state, only read and written by the game through Load and Save.
 	Data json.RawMessage `json:"data,omitempty"`
 	// Keys of stored blobs (drawings...) to delete with the match.
@@ -88,6 +117,8 @@ type Result struct {
 	Scores map[string]int `json:"scores"`
 	// Ranking points given to each player for their place.
 	Awarded map[string]int `json:"awarded,omitempty"`
+	// Unranked results do not go to the ranking (beating only bots).
+	Unranked bool `json:"unranked,omitempty"`
 	// Markdown posted in the match thread.
 	Summary string `json:"summary"`
 	// More thread replies after the summary, for results with many files.
@@ -163,6 +194,34 @@ func (m *Match) AddPlayer(userID string) {
 	if !m.IsPlayer(userID) {
 		m.Players = append(m.Players, userID)
 	}
+}
+
+// Option is the value of an option picked by the creator, or its default.
+func (m *Match) Option(info Info, key string) string {
+	if v, ok := m.Options[key]; ok {
+		return v
+	}
+	for _, o := range info.Options {
+		if o.Key == key {
+			return o.Default
+		}
+	}
+	return ""
+}
+
+// BotPrefix starts the id of a seat taken by a bot.
+const BotPrefix = "bot:"
+
+// IsBot tells a bot seat from a user.
+func IsBot(id string) bool { return strings.HasPrefix(id, BotPrefix) }
+
+// Seats are m.Players followed by bots up to n, for games that fill empty seats.
+func Seats(m *Match, n int) []string {
+	seats := slices.Clone(m.Players)
+	for i := len(seats); i < n; i++ {
+		seats = append(seats, fmt.Sprintf("%s%d", BotPrefix, i))
+	}
+	return seats
 }
 
 // Over tells whether the match has ended, finished or canceled.

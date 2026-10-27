@@ -16,11 +16,14 @@ func command(trigger string) *model.Command {
 	auto := model.NewAutocompleteData(trigger, "", "Abre el menú de minijuegos")
 	for _, g := range games {
 		info := g.Info()
-		sub := model.NewAutocompleteData(info.ID, "[directo|async]", info.Name+": "+info.Description)
+		sub := model.NewAutocompleteData(info.ID, usage(info), info.Name+": "+info.Description)
 		sub.AddStaticListArgument("Modo", false, []model.AutocompleteListItem{
 			{Item: string(engine.Live), HelpText: "Fases de un minuto"},
 			{Item: string(engine.Async), HelpText: "Fases de horas, entre tarea y tarea"},
 		})
+		if hasRival(info) {
+			sub.AddTextArgument("A quién retas (si no, el primero que se apunte o el bot)", "[@usuario]", "")
+		}
 		auto.AddCommand(sub)
 	}
 	auto.AddCommand(model.NewAutocompleteData("lienzo", "", "Abre el lienzo de la temporada"))
@@ -35,6 +38,23 @@ func command(trigger string) *model.Command {
 		AutoCompleteDesc: "Abre el menú de minijuegos",
 		AutocompleteData: auto,
 	}
+}
+
+// usage is how a game's command is written.
+func usage(info engine.Info) string {
+	if hasRival(info) {
+		return "[directo|async] [@usuario]"
+	}
+	return "[directo|async]"
+}
+
+func hasRival(info engine.Info) bool {
+	for _, o := range info.Options {
+		if o.Key == engine.OptionRival {
+			return true
+		}
+	}
+	return false
 }
 
 func ephemeral(text string) *model.CommandResponse {
@@ -68,11 +88,15 @@ func (p *Plugin) ExecuteCommand(_ *plugin.Context, args *model.CommandArgs) (*mo
 	if _, ok := gameByID(sub); !ok {
 		return ephemeral(fmt.Sprintf("No conozco «%s».\n\n%s", sub, help(trigger))), nil
 	}
-	mode := engine.Live
-	if len(fields) > 2 {
-		mode = engine.Mode(strings.ToLower(fields[2]))
+	mode, options := engine.Live, map[string]string{}
+	for _, f := range fields[2:] {
+		if strings.HasPrefix(f, "@") {
+			options[engine.OptionRival] = f
+		} else {
+			mode = engine.Mode(strings.ToLower(f))
+		}
 	}
-	if _, err := p.createMatch(args.UserId, args.ChannelId, sub, mode); err != nil {
+	if _, err := p.createMatch(args.UserId, args.ChannelId, sub, mode, options); err != nil {
 		if engine.IsRefusal(err) {
 			return ephemeral(err.Error()), nil
 		}
@@ -126,7 +150,7 @@ func help(trigger string) string {
 	fmt.Fprintf(&b, "🎲 **Minijuegos.** En el navegador o el escritorio, `/%s` abre el menú. También:\n", trigger)
 	for _, g := range games {
 		info := g.Info()
-		fmt.Fprintf(&b, "- `/%s %s [directo|async]`: %s %s\n", trigger, info.ID, info.Emoji, info.Name)
+		fmt.Fprintf(&b, "- `/%s %s %s`: %s %s\n", trigger, info.ID, usage(info), info.Emoji, info.Name)
 	}
 	fmt.Fprintf(&b, "- `/%s lienzo`: el lienzo de píxeles de la temporada\n", trigger)
 	fmt.Fprintf(&b, "- `/%s ranking [AAAA-MM]`: ranking de la temporada\n", trigger)
